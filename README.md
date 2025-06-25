@@ -1,13 +1,22 @@
 # MarketPulse
 
-This repository contains a single React component written in TypeScript that renders a market dashboard. It displays simulated pricing for stocks, cryptocurrencies, commodities and forex pairs.
+This repo contains a React dashboard component that displays simulated market data for stocks, crypto, commodities and forex pairs. It is written in TypeScript and styled with Tailwind CSS.
 
-The main component `Index` manages mock data and provides interactive features such as search, category filtering, and the ability to add custom symbols. Clicking an item opens `StockDetailModal` which shows a simulated price chart.
+A minimal Vite configuration is included so you can run the demo locally.
 
-To use the code, import `Index` into a React application. The component uses Tailwind CSS for styling and depends on icons from `lucide-react`.
+## Running locally
 
+```bash
+npm install
+npm run dev
 ```
+
+Then open `http://localhost:5173` in your browser.
+
+The main component `Index` is defined in `market-pulse-dashboard.tsx` and is mounted in `src/main.tsx`.
+
+You can import the component into other projects:
+
+```ts
 import Index from './market-pulse-dashboard';
 ```
-
-Because this repository does not include a build setup or dependencies, integrate the component into an existing React project that has TypeScript, Tailwind CSS and `lucide-react` installed.
