@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, TrendingUp, TrendingDown, DollarSign, Bitcoin, Fuel, Coins, Plus, X, BarChart3 } from 'lucide-react';
+import { Line } from 'react-chartjs-2';
+import 'chart.js/auto';
 
 interface MarketItem {
   symbol: string;
@@ -10,27 +12,54 @@ interface MarketItem {
   category: 'stocks' | 'crypto' | 'commodities' | 'forex';
 }
 
-const StockDetailModal = ({ isOpen, onClose, symbol, marketData }) => {
+interface StockDetailModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  symbol: string;
+  marketData: MarketItem[];
+  apiKey: string;
+}
+
+const StockDetailModal: React.FC<StockDetailModalProps> = ({ isOpen, onClose, symbol, marketData, apiKey }) => {
+  const [timeframe, setTimeframe] = useState<'5min' | 'daily' | 'weekly' | 'monthly'>('daily');
+  const [chartData, setChartData] = useState<{ time: string; price: number }[]>([]);
+  const [loading, setLoading] = useState(false);
+
   if (!isOpen) return null;
 
   const stockData = marketData.find(item => item.symbol === symbol);
   if (!stockData) return null;
 
-  // Generate mock chart data
-  const generateChartData = () => {
-    const data = [];
-    const basePrice = stockData.price;
-    for (let i = 30; i >= 0; i--) {
-      const variation = (Math.random() - 0.5) * 0.1;
-      data.push({
-        time: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toLocaleDateString(),
-        price: basePrice * (1 + variation)
-      });
+  const fetchChart = async () => {
+    if (!apiKey) return;
+    setLoading(true);
+    try {
+      const fnMap: Record<typeof timeframe, string> = {
+        '5min': 'TIME_SERIES_INTRADAY',
+        'daily': 'TIME_SERIES_DAILY',
+        'weekly': 'TIME_SERIES_WEEKLY',
+        'monthly': 'TIME_SERIES_MONTHLY'
+      };
+      const interval = timeframe === '5min' ? '&interval=5min' : '';
+      const url = `https://www.alphavantage.co/query?function=${fnMap[timeframe]}${interval}&symbol=${encodeURIComponent(symbol)}&outputsize=compact&apikey=${apiKey}`;
+      const res = await fetch(url);
+      const json = await res.json();
+      const seriesKey = Object.keys(json).find(k => k.includes('Time Series')) as string | undefined;
+      if (seriesKey && json[seriesKey]) {
+        const entries = Object.entries<any>(json[seriesKey]).slice(0, 200).reverse();
+        setChartData(entries.map(([time, val]) => ({ time, price: parseFloat(val['4. close'] || val['5. adjusted close'] || '0') })));
+      }
+    } catch (err) {
+      console.error(err);
     }
-    return data;
+    setLoading(false);
   };
 
-  const chartData = generateChartData();
+  useEffect(() => {
+    if (isOpen) {
+      fetchChart();
+    }
+  }, [isOpen, timeframe, symbol]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -73,23 +102,42 @@ const StockDetailModal = ({ isOpen, onClose, symbol, marketData }) => {
           <div className="bg-gray-50 p-4 rounded-lg">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <BarChart3 className="h-5 w-5" />
-              30-Day Price Chart (Simulated)
+              Price Chart
             </h3>
-            <div className="h-64 flex items-end space-x-1">
-              {chartData.map((point, index) => (
-                <div
-                  key={index}
-                  className="bg-blue-500 rounded-t flex-1 transition-all hover:bg-blue-600"
-                  style={{
-                    height: `${Math.max(10, (point.price / Math.max(...chartData.map(d => d.price))) * 100)}%`
-                  }}
-                  title={`${point.time}: $${point.price.toFixed(2)}`}
-                />
-              ))}
+            <div className="mb-4">
+              <select
+                value={timeframe}
+                onChange={(e) => setTimeframe(e.target.value as any)}
+                className="border rounded p-2 text-sm"
+              >
+                <option value="5min">5 Minutes</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
             </div>
-            <p className="text-sm text-gray-600 mt-2">
-              Hover over bars to see price data. This is simulated data for demonstration.
-            </p>
+            {loading ? (
+              <p className="text-center text-sm text-gray-500">Loading chart...</p>
+            ) : (
+              <Line
+                data={{
+                  labels: chartData.map(d => d.time),
+                  datasets: [
+                    {
+                      label: symbol,
+                      data: chartData.map(d => d.price),
+                      borderColor: 'rgb(59, 130, 246)',
+                      backgroundColor: 'rgba(59, 130, 246, 0.3)',
+                    },
+                  ],
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                }}
+                className="h-64"
+              />
+            )}
           </div>
         </div>
       </div>
@@ -109,80 +157,80 @@ const Index = () => {
   const [showApiInput, setShowApiInput] = useState(true);
   const [hasApiKey, setHasApiKey] = useState(false);
 
-  const generateMockData = (): MarketItem[] => {
-    return [
-      { symbol: 'AAPL', name: 'Apple Inc.', price: 175.84, change: 2.34, changePercent: 1.35, category: 'stocks' },
-      { symbol: 'GOOGL', name: 'Alphabet Inc.', price: 138.21, change: -1.45, changePercent: -1.04, category: 'stocks' },
-      { symbol: 'TSLA', name: 'Tesla Inc.', price: 248.50, change: 5.67, changePercent: 2.33, category: 'stocks' },
-      { symbol: 'MSFT', name: 'Microsoft Corp.', price: 378.85, change: 0.95, changePercent: 0.25, category: 'stocks' },
-      { symbol: 'AMZN', name: 'Amazon.com Inc.', price: 145.32, change: -2.15, changePercent: -1.46, category: 'stocks' },
-      { symbol: 'NVDA', name: 'NVIDIA Corporation', price: 875.28, change: 12.45, changePercent: 1.44, category: 'stocks' },
-      { symbol: 'META', name: 'Meta Platforms Inc.', price: 312.54, change: 4.87, changePercent: 1.58, category: 'stocks' },
-      { symbol: 'NFLX', name: 'Netflix Inc.', price: 487.23, change: -8.92, changePercent: -1.80, category: 'stocks' },
-      { symbol: 'AMD', name: 'Advanced Micro Devices', price: 142.67, change: 3.21, changePercent: 2.30, category: 'stocks' },
-      { symbol: 'BABA', name: 'Alibaba Group Holding', price: 89.45, change: 1.23, changePercent: 1.39, category: 'stocks' },
-      { symbol: 'BTC', name: 'Bitcoin', price: 43567.89, change: 1234.56, changePercent: 2.91, category: 'crypto' },
-      { symbol: 'ETH', name: 'Ethereum', price: 2456.78, change: -67.23, changePercent: -2.66, category: 'crypto' },
-      { symbol: 'SOL', name: 'Solana', price: 98.45, change: 3.21, changePercent: 3.37, category: 'crypto' },
-      { symbol: 'GOLD', name: 'Gold Spot', price: 2034.50, change: 12.75, changePercent: 0.63, category: 'commodities' },
-      { symbol: 'OIL', name: 'Crude Oil WTI', price: 78.92, change: -2.15, changePercent: -2.65, category: 'commodities' },
-      { symbol: 'SILVER', name: 'Silver Spot', price: 24.67, change: 0.45, changePercent: 1.86, category: 'commodities' },
-      { symbol: 'EUR/USD', name: 'Euro / US Dollar', price: 1.0892, change: 0.0023, changePercent: 0.21, category: 'forex' },
-      { symbol: 'GBP/USD', name: 'British Pound / US Dollar', price: 1.2734, change: -0.0087, changePercent: -0.68, category: 'forex' },
-    ];
+  const DEFAULT_SYMBOLS: { symbol: string; category: MarketItem['category'] }[] = [
+    { symbol: 'AAPL', category: 'stocks' },
+    { symbol: 'GOOGL', category: 'stocks' },
+    { symbol: 'TSLA', category: 'stocks' },
+    { symbol: 'MSFT', category: 'stocks' },
+    { symbol: 'AMZN', category: 'stocks' },
+    { symbol: 'NVDA', category: 'stocks' },
+    { symbol: 'META', category: 'stocks' },
+    { symbol: 'BTCUSD', category: 'crypto' },
+    { symbol: 'ETHUSD', category: 'crypto' },
+    { symbol: 'XAUUSD', category: 'commodities' },
+    { symbol: 'WTI', category: 'commodities' },
+    { symbol: 'EURUSD', category: 'forex' },
+    { symbol: 'GBPUSD', category: 'forex' },
+  ];
+
+  const fetchQuote = async (symbol: string): Promise<any> => {
+    if (!apiKey) return null;
+    const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`;
+    try {
+      const res = await fetch(url);
+      const json = await res.json();
+      return json['Global Quote'];
+    } catch (err) {
+      console.error(err);
+      return null;
+    }
+  };
+
+  const fetchMarketItem = async (symbol: string, category: MarketItem['category']): Promise<MarketItem | null> => {
+    const quote = await fetchQuote(symbol);
+    if (!quote) return null;
+    return {
+      symbol: quote['01. symbol'],
+      name: quote['01. symbol'],
+      price: parseFloat(quote['05. price']),
+      change: parseFloat(quote['09. change']),
+      changePercent: parseFloat((quote['10. change percent'] || '0').replace('%','')),
+      category,
+    };
+  };
+
+  const fetchInitialData = async () => {
+    setIsLoading(true);
+    const items = await Promise.all(
+      DEFAULT_SYMBOLS.map(s => fetchMarketItem(s.symbol, s.category))
+    );
+    setMarketData(items.filter(Boolean) as MarketItem[]);
+    setIsLoading(false);
   };
 
   const saveApiKey = () => {
     if (apiKey.trim()) {
       setHasApiKey(true);
       setShowApiInput(false);
-      alert(`API Key saved: ${apiKey.substring(0, 8)}... 
-      
-In a real application, this would now fetch live data from Alpha Vantage API. For this demo, we'll continue showing simulated data that updates every 30 seconds.`);
+      fetchInitialData();
     }
   };
 
   useEffect(() => {
-    // Simulate loading
-    setTimeout(() => {
-      setMarketData(generateMockData());
-      setIsLoading(false);
-    }, 1500);
+    if (hasApiKey) {
+      fetchInitialData();
+    }
+  }, [hasApiKey]);
 
-    // Update data every 30 seconds with small random changes
-    const interval = setInterval(() => {
-      setMarketData(prevData => 
-        prevData.map(item => ({
-          ...item,
-          price: item.price * (1 + (Math.random() - 0.5) * 0.001),
-          change: item.change + (Math.random() - 0.5) * 0.5,
-          changePercent: item.changePercent + (Math.random() - 0.5) * 0.1
-        }))
-      );
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const addCustomStock = () => {
+  const addCustomStock = async () => {
     if (!customSymbol.trim()) return;
-    
-    const mockItem: MarketItem = {
-      symbol: customSymbol.toUpperCase(),
-      name: `${customSymbol.toUpperCase()} Corporation`,
-      price: Math.random() * 500 + 50,
-      change: (Math.random() - 0.5) * 10,
-      changePercent: (Math.random() - 0.5) * 5,
-      category: 'stocks'
-    };
-    
-    // Check if symbol already exists
-    const exists = marketData.some(item => item.symbol === mockItem.symbol);
-    if (!exists) {
-      setMarketData(prev => [...prev, mockItem]);
+    const item = await fetchMarketItem(customSymbol.trim(), 'stocks');
+    if (item && !marketData.some(m => m.symbol === item.symbol)) {
+      setMarketData(prev => [...prev, item]);
     }
     setCustomSymbol('');
   };
+
 
   const filteredData = marketData.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -313,6 +361,12 @@ In a real application, this would now fetch live data from Alpha Vantage API. Fo
               placeholder="Search for stocks, crypto, commodities..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setCustomSymbol(searchTerm.toUpperCase());
+                  addCustomStock();
+                }
+              }}
               className="w-full pl-10 pr-4 py-3 text-lg bg-white/10 border border-white/20 rounded-lg text-white placeholder-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 focus:outline-none backdrop-blur-lg"
             />
           </div>
@@ -425,7 +479,7 @@ In a real application, this would now fetch live data from Alpha Vantage API. Fo
         {/* Footer */}
         <div className="text-center mt-16 pt-8 border-t border-white/10">
           <p className="text-slate-400">
-            Market data updates every 30 seconds • Click any item for real-time charts • Built with React & TypeScript
+            Prices powered by Alpha Vantage • Click any item for charts • Built with React &amp; TypeScript
           </p>
         </div>
       </div>
@@ -439,6 +493,7 @@ In a real application, this would now fetch live data from Alpha Vantage API. Fo
         }}
         symbol={selectedStock || ''}
         marketData={marketData}
+        apiKey={apiKey}
       />
     </div>
   );
