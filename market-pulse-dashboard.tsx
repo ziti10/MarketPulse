@@ -10,7 +10,14 @@ interface MarketItem {
   category: 'stocks' | 'crypto' | 'commodities' | 'forex';
 }
 
-const StockDetailModal = ({ isOpen, onClose, symbol, marketData }) => {
+interface StockDetailModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  symbol: string;
+  marketData: MarketItem[];
+}
+
+const StockDetailModal: React.FC<StockDetailModalProps> = ({ isOpen, onClose, symbol, marketData }) => {
   if (!isOpen) return null;
 
   const stockData = marketData.find(item => item.symbol === symbol);
